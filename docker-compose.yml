@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - MODEL_NAME=depth-anything/Depth-Anything-V2-Small-hf
+      - DEVICE=cpu
+    volumes:
+      - ./backend/storage:/app/backend/storage
+      - ./data/samples:/app/data/samples
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
