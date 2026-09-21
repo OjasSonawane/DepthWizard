@@ -57,3 +57,6 @@ datasets/
 outputs/
 results/
 runs/
+# DepthWizard generated storage
+backend/storage/
+*.npy
