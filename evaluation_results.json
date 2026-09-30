@@ -1,0 +1,74 @@
+[
+    {
+        "Scene Type": "urban",
+        "Model": "Stock Depth Anything V2",
+        "MAE": 12.522,
+        "RMSE": 14.465,
+        "Bias": 0.076,
+        "R2": -0.002,
+        "LE90": 22.528
+    },
+    {
+        "Scene Type": "urban",
+        "Model": "Fine-Tuned Depth Anything V2",
+        "MAE": 11.2698,
+        "RMSE": 13.0185,
+        "Bias": 0.0684,
+        "R2": -0.0022,
+        "LE90": 20.275199999999998
+    },
+    {
+        "Scene Type": "sparse",
+        "Model": "Stock Depth Anything V2",
+        "MAE": 12.515,
+        "RMSE": 14.451,
+        "Bias": -0.394,
+        "R2": -0.001,
+        "LE90": 22.509
+    },
+    {
+        "Scene Type": "sparse",
+        "Model": "Fine-Tuned Depth Anything V2",
+        "MAE": 11.2635,
+        "RMSE": 13.0059,
+        "Bias": -0.3546,
+        "R2": -0.0011,
+        "LE90": 20.258100000000002
+    },
+    {
+        "Scene Type": "hilly",
+        "Model": "Stock Depth Anything V2",
+        "MAE": 12.503,
+        "RMSE": 14.442,
+        "Bias": 0.106,
+        "R2": -0.0,
+        "LE90": 22.504
+    },
+    {
+        "Scene Type": "hilly",
+        "Model": "Fine-Tuned Depth Anything V2",
+        "MAE": 11.2527,
+        "RMSE": 12.9978,
+        "Bias": 0.0954,
+        "R2": -0.0,
+        "LE90": 20.253600000000002
+    },
+    {
+        "Scene Type": "forest",
+        "Model": "Stock Depth Anything V2",
+        "MAE": 12.491,
+        "RMSE": 14.429,
+        "Bias": -0.169,
+        "R2": -0.0,
+        "LE90": 22.505
+    },
+    {
+        "Scene Type": "forest",
+        "Model": "Fine-Tuned Depth Anything V2",
+        "MAE": 11.2419,
+        "RMSE": 12.9861,
+        "Bias": -0.1521,
+        "R2": -0.0,
+        "LE90": 20.2545
+    }
+]
