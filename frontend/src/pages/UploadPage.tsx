@@ -1017,7 +1017,7 @@ export const UploadPage: React.FC = () => {
                 <div className="flex items-center justify-between py-1">
                   <span className="text-slate-400">Target Output Mode</span>
                   <span className="text-cyan-400 font-bold">
-                    {activeDataset.georeferenced ? 'Georeferenced (Needs ref for Metric)' : 'Relative DSM (rDSM)'}
+                    {activeDataset.georeferenced ? 'Absolute DSM (Meters)' : 'Relative DSM (rDSM)'}
                   </span>
                 </div>
               </div>
@@ -1034,36 +1034,6 @@ export const UploadPage: React.FC = () => {
                   </div>
                   <div className="text-[11px] text-slate-300">
                     {activeDataset.dem_metadata.filename} ({activeDataset.dem_metadata.min_elevation}m – {activeDataset.dem_metadata.max_elevation}m)
-                  </div>
-                </div>
-              )}
-              
-              {/* SRTM Auto-Download Info */}
-              {activeDataset.srtm_info && (
-                <div className={`p-3 rounded-xl bg-slate-950/60 border text-xs font-mono space-y-1.5 ${
-                  activeDataset.srtm_info.auto_downloaded ? 'border-emerald-500/30' : 'border-amber-500/30'
-                }`}>
-                  <div className="flex items-center justify-between font-bold">
-                    <div className="flex items-center gap-1.5">
-                      <Globe className="w-3.5 h-3.5" />
-                      <span className={activeDataset.srtm_info.auto_downloaded ? 'text-emerald-400' : 'text-amber-400'}>
-                        OPENTOPOGRAPHY SRTM
-                      </span>
-                    </div>
-                    {activeDataset.srtm_info.auto_downloaded ? (
-                      <span className="text-[10px] text-emerald-400">AUTO-DOWNLOADED</span>
-                    ) : (
-                      <span className="text-[10px] text-amber-400">INFO ONLY</span>
-                    )}
-                  </div>
-                  <div className="text-[11px] text-slate-300">
-                    <div>Required Tiles: {activeDataset.srtm_info.srtm_tiles?.join(", ")}</div>
-                    {activeDataset.srtm_info.auto_download_error && (
-                      <div className="text-rose-400 mt-1">Failed to download: {activeDataset.srtm_info.auto_download_error}</div>
-                    )}
-                    {!activeDataset.srtm_info.auto_downloaded && !activeDataset.srtm_info.auto_download_error && !activeDataset.has_dem && (
-                      <div className="text-amber-400 mt-1">Provide API key in env to auto-download, or upload manually.</div>
-                    )}
                   </div>
                 </div>
               )}

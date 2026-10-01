@@ -6,16 +6,14 @@ from pydantic_settings import BaseSettings
 storage_cache = Path(__file__).resolve().parent.parent / "storage"
 os.environ["MPLCONFIGDIR"] = str(storage_cache)
 os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
-if os.environ.get("DEPTHWIZARD_OFFLINE") == "1":
-    os.environ["HF_HUB_OFFLINE"] = "1"
-    os.environ["TRANSFORMERS_OFFLINE"] = "1"
+os.environ["HF_HUB_OFFLINE"] = "1"
+os.environ["TRANSFORMERS_OFFLINE"] = "1"
 import torch
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "DepthWizard"
     VERSION: str = "1.0.0"
     API_PREFIX: str = "/api"
-    OPENTOPOGRAPHY_API_KEY: str | None = None
     
     # Base directories
     BASE_DIR: Path = Path(__file__).resolve().parent.parent
@@ -36,7 +34,6 @@ class Settings(BaseSettings):
     # ML settings
     MODEL_NAME: str = "depth-anything/Depth-Anything-V2-Small-hf"
     ALT_MODEL_NAME: str = "Intel/dpt-hybrid-midas"
-    MODEL_WEIGHTS: str | None = os.environ.get("MODEL_WEIGHTS")
     
     @property
     def DEVICE(self) -> str:

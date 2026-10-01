@@ -110,7 +110,7 @@ class TestPhase6Integration:
         assert status_after["depth"]["unit"] == "relative"
         assert status_after["depth"]["normalized_range"] == [0.0, 1.0]
         assert status_after["calibration"] is not None
-        assert status_after["calibration"]["method"] == "relative"
+        assert status_after["calibration"]["method"] == "scaled_estimate"
         assert status_after["dsm"] is not None
         assert status_after["dsm"]["is_metric"] is False
         assert status_after["artifacts"] is not None

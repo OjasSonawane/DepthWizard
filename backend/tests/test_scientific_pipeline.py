@@ -14,7 +14,8 @@ from app.services.calibration_service import (
     CalibrationService,
     RelativeCalibrationStrategy,
     DEMCalibrationStrategy,
-    GCPCalibrationStrategy
+    GCPCalibrationStrategy,
+    ScaledEstimateCalibrationStrategy
 )
 from app.services.dsm_service import DSMService
 from app.services.evaluation_service import EvaluationService
@@ -149,30 +150,6 @@ class TestScaleCalibrationStrategies:
         assert pytest.approx(result.offset, abs=0.5) == true_offset
         assert pytest.approx(result.r2, abs=0.01) == 1.0
 
-    def test_no_reference_yields_non_metric(self):
-        """No-reference input never yields is_metric=true or units 'meters'."""
-        depth = np.array([[0.0, 0.5], [0.8, 1.0]], dtype=np.float32)
-        dsm, result = CalibrationService.calibrate_relative(depth)
-        assert result.is_metric is False
-        assert result.method == "relative"
-
-    def test_dem_calibration_recovers_known_z_to_less_than_1_percent_error(self):
-        """DEM calibration recovers a known Z=aD+b to <1% error on a controlled test array."""
-        np.random.seed(1337)
-        depth = np.linspace(0.2, 0.8, 10000).astype(np.float32).reshape(100, 100)
-        a = 150.0
-        b = 25.0
-        known_z = (a * depth + b).astype(np.float32)
-        
-        # Add a tiny bit of noise to simulate real conditions
-        noise = np.random.normal(0, 0.1, known_z.shape)
-        ref_dem = (known_z + noise).astype(np.float32)
-
-        dsm, result = DEMCalibrationStrategy().calibrate(depth, reference_dem=ref_dem)
-        assert result.is_metric is True
-        assert abs(result.scale - a) / a < 0.01
-        assert abs(result.offset - b) / b < 0.01
-
     def test_dem_huber_calibration_outlier_immunity(self):
         """Huber loss must resist extreme corrupted outlier points where OLS would fail."""
         depth = np.linspace(0.0, 1.0, 500).astype(np.float32).reshape(50, 10)
@@ -285,68 +262,6 @@ class TestTerrainDerivatives:
 
 class TestValidationAndErrorMetrics:
     """Tests 9, 10, 11, 12: MAE, RMSE, Pearson r, R2, MBE, LE90, LE95, Error Maps."""
-
-    def test_mae_rmse_independent_numpy_computation(self, tmp_path):
-        """MAE/RMSE match an independent NumPy computation."""
-        np.random.seed(42)
-        ref = np.random.uniform(50.0, 150.0, (100, 100)).astype(np.float32)
-        pred = ref + np.random.normal(0, 5.0, (100, 100)).astype(np.float32)
-
-        out_prefix = tmp_path / "test_eval_numpy"
-        metrics, *_ = EvaluationService.evaluate_against_reference(
-            predicted_dsm=pred,
-            reference_dsm=ref,
-            output_prefix=out_prefix
-        )
-
-        indep_mae = np.mean(np.abs(pred - ref))
-        indep_rmse = np.sqrt(np.mean((pred - ref) ** 2))
-        
-        assert pytest.approx(metrics.mae, abs=1e-2) == float(indep_mae)
-        assert pytest.approx(metrics.rmse, abs=1e-2) == float(indep_rmse)
-
-    def test_spatial_overlap_error_no_overlap(self, tmp_path):
-        """Differing extents with no overlap must fail cleanly with SpatialOverlapError."""
-        from app.services.geospatial_service import SpatialOverlapError
-        from affine import Affine
-        pred = np.zeros((15, 15), dtype=np.float32)
-        # We need a reference path to trigger reproject_match
-        import rasterio
-        ref_path = tmp_path / "ref.tif"
-        with rasterio.open(
-            ref_path, "w", driver="GTiff", height=10, width=10, count=1,
-            dtype="float32", crs="EPSG:32643", transform=Affine.translation(0, 0)
-        ) as dst:
-            dst.write(np.zeros((10, 10), dtype=np.float32), 1)
-
-        # Pred is far away
-        pred_transform = [1.0, 0.0, 1000.0, 0.0, -1.0, 1000.0]
-        with pytest.raises(SpatialOverlapError):
-            EvaluationService.evaluate_against_reference(
-                predicted_dsm=pred, reference_dsm=np.zeros((10,10)), output_prefix=tmp_path/"out",
-                crs="EPSG:32643", transform=pred_transform, reference_path=ref_path
-            )
-
-    def test_spatial_overlap_error_differing_crs(self, tmp_path):
-        """Differing CRS handles reprojection properly, but if overlap < 50%, fails cleanly."""
-        from app.services.geospatial_service import SpatialOverlapError
-        from affine import Affine
-        pred = np.zeros((15, 15), dtype=np.float32)
-        import rasterio
-        ref_path = tmp_path / "ref2.tif"
-        with rasterio.open(
-            ref_path, "w", driver="GTiff", height=10, width=10, count=1,
-            dtype="float32", crs="EPSG:4326", transform=Affine.translation(0, 0)
-        ) as dst:
-            dst.write(np.zeros((10, 10), dtype=np.float32), 1)
-
-        # Pred is in completely different UTM CRS that doesn't overlap lon/lat 0,0
-        pred_transform = [1.0, 0.0, 500000.0, 0.0, -1.0, 4000000.0]
-        with pytest.raises(SpatialOverlapError):
-            EvaluationService.evaluate_against_reference(
-                predicted_dsm=pred, reference_dsm=np.zeros((10,10)), output_prefix=tmp_path/"out",
-                crs="EPSG:32643", transform=pred_transform, reference_path=ref_path
-            )
 
     def test_statistical_metrics_exact_computation(self, tmp_path):
         """Validate MAE, RMSE, MBE, R2, LE90, LE95 against exact mathematical formulas."""

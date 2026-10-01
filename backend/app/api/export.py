@@ -19,35 +19,10 @@ def build_project_report(job_id: str, results) -> dict:
     job = pipeline.jobs.get(job_id, {})
     eval_data = job.get("evaluation", {})
 
-    try:
-        import torch, transformers, rasterio, sys, subprocess
-        try:
-            import osgeo.gdal as gdal
-            gdal_ver = gdal.__version__
-        except ImportError:
-            gdal_ver = getattr(rasterio, '__gdal_version__', 'N/A')
-        
-        try:
-            git_sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], stderr=subprocess.DEVNULL).decode('ascii').strip()
-        except Exception:
-            git_sha = "N/A"
-            
-        env_metadata = {
-            "git_sha": git_sha,
-            "python_version": sys.version.split()[0],
-            "torch_version": torch.__version__,
-            "transformers_version": transformers.__version__,
-            "rasterio_version": rasterio.__version__,
-            "gdal_version": gdal_ver
-        }
-    except Exception:
-        env_metadata = {}
-
     report = {
         "platform": "DepthWizard AI Remote-Sensing 3D Reconstruction",
         "version": settings.VERSION,
         "pipeline_version": settings.VERSION,
-        "environment": env_metadata,
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "job_id": job_id,
         "input": {

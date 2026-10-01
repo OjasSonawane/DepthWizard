@@ -191,7 +191,7 @@ export const AnalysisPage: React.FC = () => {
           <div className="flex items-center space-x-2">
             <ShieldAlert className="w-4 h-4 text-amber-400" />
             <h3 className="text-sm font-bold text-white uppercase tracking-wider">
-              Slope Hazard Screening Categories
+              Slope Instability & Hazard Screening Categories
             </h3>
           </div>
           <div className="text-xs text-slate-400">

@@ -128,7 +128,7 @@ export interface JobStatus {
 }
 
 export interface CalibrationResult {
-  method: 'dem' | 'gcp' | 'relative';
+  method: 'dem' | 'gcp' | 'scaled_estimate' | 'relative';
   is_metric: boolean;
   scale: number;
   offset: number;
@@ -138,7 +138,7 @@ export interface CalibrationResult {
   correlation?: number | null;
   valid_pixels?: number | null;
   gcp_count?: number | null;
-  confidence: 'high' | 'medium' | 'low' | 'relative';
+  confidence: 'high' | 'medium' | 'estimated' | 'relative';
   message: string;
 }
 
@@ -232,8 +232,6 @@ export interface HeightfieldData {
   interpolation_method?: string;
   world_x_span: number;
   world_z_span: number;
-  scene_height: number;
-  grid_gsd?: [number, number];
   min_elevation: number;
   max_elevation: number;
   relief: number;
@@ -436,7 +434,6 @@ export interface DatasetSummary {
   active_job_id?: string | null;
   latest_results?: ReconstructionSummary | null;
   input_validation?: InputValidationResult | null;
-  srtm_info?: any;
 }
 
 export interface DatasetListResponse {

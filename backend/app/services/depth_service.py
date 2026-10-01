@@ -75,8 +75,7 @@ class PipelineManager:
         dem_path: Optional[Any] = None,
         gcp_path: Optional[Any] = None,
         dem_metadata: Optional[DEMMetadata] = None,
-        dataset_id: Optional[str] = None,
-        srtm_info: Optional[Dict[str, Any]] = None
+        dataset_id: Optional[str] = None
     ) -> JobStatus:
         image_path = Path(image_path)
         dem_path = Path(dem_path) if dem_path else None
@@ -108,8 +107,7 @@ class PipelineManager:
             "band_count": metadata.band_count,
             "file_hash": metadata.file_hash,
             "dem_path": str(dem_path) if dem_path else None,
-            "gcp_path": str(gcp_path) if gcp_path else None,
-            "srtm_info": srtm_info
+            "gcp_path": str(gcp_path) if gcp_path else None
         }
 
         self.jobs[job_id] = {
@@ -265,15 +263,17 @@ class PipelineManager:
             elif dem_path and dem_path.exists():
                 # Georeferenced with DEM
                 try:
-                    dsm, calib_result = CalibrationService.calibrate_with_dem(
-                        relative_depth=norm_depth,
+                    ref_dem = GeospatialService.reproject_match(
                         reference_path=dem_path,
-                        crs_str=meta.crs,
-                        transform_list=meta.transform
+                        target_shape=norm_depth.shape,
+                        target_crs_str=meta.crs,
+                        target_transform_list=meta.transform
                     )
+                    ref_dem_matched = ref_dem
+                    dsm, calib_result = CalibrationService.calibrate_with_dem(norm_depth, ref_dem)
                 except Exception as ex_dem:
-                    logger.warning(f"DEM calibration failed ({ex_dem}), falling back to relative rDSM")
-                    dsm, calib_result = CalibrationService.calibrate_relative(norm_depth)
+                    logger.warning(f"DEM co-registration failed ({ex_dem}), using scaled estimate")
+                    dsm, calib_result = CalibrationService.calibrate_scaled_estimate(norm_depth)
             elif gcp_path and gcp_path.exists():
                 # Georeferenced with GCPs
                 try:
@@ -282,11 +282,11 @@ class PipelineManager:
                         norm_depth, gcps, meta.transform, crs_str=meta.crs
                     )
                 except Exception as ex_gcp:
-                    logger.warning(f"GCP calibration failed ({ex_gcp}), falling back to relative rDSM")
-                    dsm, calib_result = CalibrationService.calibrate_relative(norm_depth)
+                    logger.warning(f"GCP calibration failed ({ex_gcp}), using scaled estimate")
+                    dsm, calib_result = CalibrationService.calibrate_scaled_estimate(norm_depth)
             else:
-                # Georeferenced without DEM/GCP -> relative rDSM
-                dsm, calib_result = CalibrationService.calibrate_relative(norm_depth)
+                # Georeferenced without DEM/GCP -> scaled estimate
+                dsm, calib_result = CalibrationService.calibrate_scaled_estimate(norm_depth)
 
             timings["calibration"] = round(time.time() - t0, 3)
             job["calibration"] = calib_result.model_dump()
@@ -305,34 +305,10 @@ class PipelineManager:
                 "MODEL_VERSION": settings.VERSION,
                 "CALIBRATION_METHOD": calib_result.method,
                 "REFERENCE_SOURCE": dem_path.name if dem_path and dem_path.exists() else ("GCP_CSV" if gcp_path and gcp_path.exists() else "NONE"),
-                "ELEVATION_UNITS": "meters" if calib_result.is_metric else "relative_relief",
+                "ELEVATION_UNITS": "meters" if calib_result.is_metric else "relative",
                 "PIPELINE_VERSION": settings.VERSION,
                 "TIMESTAMP": datetime.now(timezone.utc).isoformat()
             }
-
-            try:
-                import torch, transformers, rasterio, sys, subprocess
-                try:
-                    import osgeo.gdal as gdal
-                    gdal_ver = gdal.__version__
-                except ImportError:
-                    gdal_ver = getattr(rasterio, '__gdal_version__', 'N/A')
-                
-                try:
-                    git_sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], stderr=subprocess.DEVNULL).decode('ascii').strip()
-                except Exception:
-                    git_sha = "N/A"
-                    
-                dsm_meta_tags.update({
-                    "DEPTHWIZARD_GIT_SHA": git_sha,
-                    "DEPTHWIZARD_PYTHON_VERSION": sys.version.split()[0],
-                    "DEPTHWIZARD_TORCH_VERSION": torch.__version__,
-                    "DEPTHWIZARD_TRANSFORMERS_VERSION": transformers.__version__,
-                    "DEPTHWIZARD_RASTERIO_VERSION": rasterio.__version__,
-                    "DEPTHWIZARD_GDAL_VERSION": gdal_ver
-                })
-            except Exception as e:
-                logger.warning(f"Could not inject dependency versions into GeoTIFF tags: {e}")
 
             GeospatialService.save_geotiff(
                 output_path=dsm_geotiff_path,
@@ -385,21 +361,11 @@ class PipelineManager:
                 output_prefix=mesh_prefix,
                 quality="high",
                 grid_dim=192,
-                reference_path=dem_path if (dem_path and dem_path.exists()) else None,
-                crs_str=meta.crs,
-                transform_list=meta.transform
+                reference_dsm=ref_dem_matched
             )
             # Pre-generate low (64x64) and medium (128x128) LODs as well
-            MeshService.generate_mesh_assets(
-                dsm=dsm, output_prefix=mesh_prefix, quality="low", grid_dim=64, 
-                reference_path=dem_path if (dem_path and dem_path.exists()) else None, 
-                crs_str=meta.crs, transform_list=meta.transform
-            )
-            MeshService.generate_mesh_assets(
-                dsm=dsm, output_prefix=mesh_prefix, quality="medium", grid_dim=128, 
-                reference_path=dem_path if (dem_path and dem_path.exists()) else None, 
-                crs_str=meta.crs, transform_list=meta.transform
-            )
+            MeshService.generate_mesh_assets(dsm=dsm, output_prefix=mesh_prefix, quality="low", grid_dim=64, reference_dsm=ref_dem_matched)
+            MeshService.generate_mesh_assets(dsm=dsm, output_prefix=mesh_prefix, quality="medium", grid_dim=128, reference_dsm=ref_dem_matched)
             timings["mesh_generation"] = round(time.time() - t0, 3)
 
             # 07 Texture Projection & Visualizations
@@ -501,7 +467,6 @@ class PipelineManager:
                 assets=assets,
                 timing_seconds=timings,
                 device_used=self.depth_model.device.upper(),
-                model_used=self.depth_model.model_name + (" (finetuned)" if settings.MODEL_WEIGHTS else ""),
                 elevation_histogram=hist_data,
                 dataset_id=job.get("dataset_id")
             )
@@ -602,8 +567,7 @@ class PipelineManager:
             selected_metrics=selected_metrics,
             crs=job_crs,
             transform=job_transform,
-            strata_labels=job.get("strata_labels") or job.get("strata_masks"),
-            reference_path=ref_file_path
+            strata_labels=job.get("strata_labels") or job.get("strata_masks")
         )
 
         resp = EvaluationResponse(
@@ -639,18 +603,9 @@ class PipelineManager:
         # Refresh 3D terrain heightfield with reference DEM paired values
         try:
             mesh_prefix = settings.MESH_DIR / job_id
-            MeshService.generate_mesh_assets(
-                dsm=pred_dsm, output_prefix=mesh_prefix, quality="high", grid_dim=192, 
-                reference_path=ref_file_path, crs_str=job_crs, transform_list=job_transform
-            )
-            MeshService.generate_mesh_assets(
-                dsm=pred_dsm, output_prefix=mesh_prefix, quality="low", grid_dim=64, 
-                reference_path=ref_file_path, crs_str=job_crs, transform_list=job_transform
-            )
-            MeshService.generate_mesh_assets(
-                dsm=pred_dsm, output_prefix=mesh_prefix, quality="medium", grid_dim=128, 
-                reference_path=ref_file_path, crs_str=job_crs, transform_list=job_transform
-            )
+            MeshService.generate_mesh_assets(dsm=pred_dsm, output_prefix=mesh_prefix, quality="high", grid_dim=192, reference_dsm=ref_dsm)
+            MeshService.generate_mesh_assets(dsm=pred_dsm, output_prefix=mesh_prefix, quality="low", grid_dim=64, reference_dsm=ref_dsm)
+            MeshService.generate_mesh_assets(dsm=pred_dsm, output_prefix=mesh_prefix, quality="medium", grid_dim=128, reference_dsm=ref_dsm)
         except Exception as ex_m:
             logger.warning(f"Could not refresh 3D mesh with reference DEM: {ex_m}")
 

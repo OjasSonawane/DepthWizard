@@ -362,15 +362,6 @@ export const DSMViewerPage: React.FC = () => {
                       : 'Unavailable')}
                 </span>
               </div>
-              
-              {calibration.confidence === 'low' && (
-                <div className="mt-2 p-2 bg-red-950/40 border border-red-900/50 rounded flex items-start gap-2">
-                  <AlertTriangle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
-                  <p className="text-[10px] text-red-400">
-                    <strong>Low Calibration Confidence:</strong> {calibration.message || "Quality is poor due to low DEM coverage, low correlation, or high residual."}
-                  </p>
-                </div>
-              )}
             </div>
           </div>
         </div>

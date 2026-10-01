@@ -98,15 +98,7 @@ export const TerrainMesh: React.FC<TerrainMeshProps> = ({
 
     const dx = Math.abs(hRight - hCenter);
     const dz = Math.abs(hDown - hCenter);
-    
-    // Accurate slope estimation using real ground cell size (GSD)
-    const gsdX = heightfield.grid_gsd ? heightfield.grid_gsd[0] : 1.0;
-    const gsdZ = heightfield.grid_gsd ? heightfield.grid_gsd[1] : 1.0;
-    
-    const gradX = dx / gsdX;
-    const gradZ = dz / gsdZ;
-    const gradientMag = Math.sqrt(gradX * gradX + gradZ * gradZ);
-    const slopeDeg = Math.min(90, Math.atan(gradientMag) * (180 / Math.PI));
+    const slopeDeg = Math.min(90, (Math.atan(Math.hypot(dx, dz) / 2.0) * 180) / Math.PI);
 
     return {
       worldPos: [x, y, z] as [number, number, number],

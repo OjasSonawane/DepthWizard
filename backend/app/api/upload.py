@@ -78,29 +78,6 @@ async def upload_file(
             except Exception as e:
                 parsed_gcps = []
 
-    srtm_info = None
-    if metadata.is_georeferenced and metadata.crs and metadata.bounds:
-        srtm_info = GeospatialService.get_srtm_tile_info(metadata.bounds, metadata.crs)
-        
-        if dem_save_path is None and settings.OPENTOPOGRAPHY_API_KEY:
-            try:
-                auto_dem_path = job_dir / "auto_srtm.tif"
-                GeospatialService.download_opentopo_srtm(
-                    srtm_info["bbox_4326"], 
-                    auto_dem_path, 
-                    settings.OPENTOPOGRAPHY_API_KEY
-                )
-                dem_save_path = auto_dem_path
-                dem_metadata = GeospatialService.inspect_dem_file(
-                    dem_path=dem_save_path,
-                    image_crs=metadata.crs,
-                    image_bounds=metadata.bounds
-                )
-                srtm_info["auto_downloaded"] = True
-            except Exception as e:
-                srtm_info["auto_downloaded"] = False
-                srtm_info["auto_download_error"] = str(e)
-
     # Register job
     pipeline = PipelineManager.get_instance()
     pipeline.register_job(
@@ -109,8 +86,7 @@ async def upload_file(
         metadata=metadata,
         dem_path=dem_save_path,
         gcp_path=gcp_save_path,
-        dem_metadata=dem_metadata,
-        srtm_info=srtm_info
+        dem_metadata=dem_metadata
     )
 
     msg = "Georeferenced GeoTIFF identified." if metadata.is_georeferenced else "Standard non-georeferenced imagery identified (will generate rDSM)."
@@ -123,6 +99,5 @@ async def upload_file(
         dem_metadata=dem_metadata,
         has_gcp=gcp_save_path is not None,
         parsed_gcps=parsed_gcps,
-        srtm_info=srtm_info,
         message=msg
     )

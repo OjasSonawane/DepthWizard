@@ -23,9 +23,7 @@ class MeshService:
         quality: str = "high",
         grid_dim: Optional[int] = None,
         exaggeration: float = 1.0,
-        reference_path: Optional[Path] = None,
-        crs_str: Optional[str] = None,
-        transform_list: Optional[Any] = None
+        reference_dsm: Optional[np.ndarray] = None
     ) -> Tuple[MeshMetadata, Path, Path]:
         """
         Converts 2D DSM into:
@@ -82,32 +80,18 @@ class MeshService:
         # Resample reference DSM if available for point inspection
         reference_elevations = None
         elevation_errors = None
-        if reference_path is not None and crs_str is not None and transform_list is not None:
+        if reference_dsm is not None:
             try:
-                from app.services.geospatial_service import GeospatialService
-                from affine import Affine
-                
-                # Adjust transform for the new grid size
-                orig_transform = Affine(*transform_list) if isinstance(transform_list, (list, tuple)) else transform_list
-                scale_x = w_orig / grid_w
-                scale_y = h_orig / grid_h
-                # The new transform scales pixels by (scale_x, scale_y)
-                new_transform = orig_transform * Affine.scale(scale_x, scale_y)
-                new_transform_list = [new_transform.a, new_transform.b, new_transform.c, new_transform.d, new_transform.e, new_transform.f]
-
-                ref_grid = GeospatialService.reproject_match(
-                    reference_path=reference_path,
-                    target_shape=(grid_h, grid_w),
-                    target_crs_str=crs_str,
-                    target_transform_list=new_transform_list
-                )
+                ref_valid = np.isfinite(reference_dsm) & (reference_dsm > -9000.0)
+                ref_clean = np.where(ref_valid, reference_dsm, np.nan)
+                ref_grid = cv2.resize(ref_clean, (grid_w, grid_h), interpolation=cv2.INTER_NEAREST)
 
                 ref_list = []
                 err_list = []
                 for r in range(grid_h):
                     for c in range(grid_w):
                         r_val = ref_grid[r, c]
-                        if np.isfinite(r_val) and r_val > -9000.0:
+                        if np.isfinite(r_val):
                             p_val = float(dsm_grid[r, c])
                             r_f = float(r_val)
                             ref_list.append(round(r_f, 2))
@@ -120,17 +104,6 @@ class MeshService:
             except Exception as e_ref:
                 logger.warning(f"Could not compute reference elevation grid: {e_ref}")
 
-        gsd_x, gsd_y = 1.0, 1.0
-        if transform_list is not None and crs_str is not None:
-            try:
-                from app.services.geospatial_service import GeospatialService
-                raw_res = [abs(transform_list[0]), abs(transform_list[4])]
-                dx, dy = GeospatialService.get_ground_resolution_meters(crs_str=crs_str, resolution=raw_res)
-                gsd_x = dx * (w_orig / grid_w)
-                gsd_y = dy * (h_orig / grid_h)
-            except Exception as e:
-                logger.warning(f"Could not compute GSD for mesh: {e}")
-
         # 1. Heightfield JSON
         heightfield_data = {
             "quality": quality,
@@ -142,8 +115,6 @@ class MeshService:
             "interpolation_method": "bicubic" if is_upsampling else "area_decimation",
             "world_x_span": world_x_span,
             "world_z_span": world_z_span,
-            "scene_height": base_scene_height,
-            "grid_gsd": [round(gsd_x, 4), round(gsd_y, 4)],
             "min_elevation": round(min_val, 2),
             "max_elevation": round(max_val, 2),
             "relief": round(relief, 2),

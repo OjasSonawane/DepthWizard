@@ -266,8 +266,7 @@ class DatasetService:
                     thumbnail_url=f"/api/datasets/{ds_id}/thumbnail",
                     active_job_id=active_job_id,
                     latest_results=latest_results,
-                    input_validation=val_res,
-                    srtm_info=data.get("srtm_info")
+                    input_validation=val_res
                 )
                 self.datasets[ds_id] = summary
                 logger.info(f"Loaded persistent user dataset: {ds_id} ({summary.name})")
@@ -328,31 +327,6 @@ class DatasetService:
                     image_crs=meta.crs,
                     image_bounds=meta.bounds
                 )
-                
-        # Optional: Auto-download SRTM if no DEM provided and API key is set
-        srtm_info = None
-        if meta.is_georeferenced and meta.crs and meta.bounds:
-            srtm_info = GeospatialService.get_srtm_tile_info(meta.bounds, meta.crs)
-            
-            if dem_save_path is None and settings.OPENTOPOGRAPHY_API_KEY:
-                try:
-                    auto_dem_path = ds_dir / "auto_srtm.tif"
-                    GeospatialService.download_opentopo_srtm(
-                        srtm_info["bbox_4326"], 
-                        auto_dem_path, 
-                        settings.OPENTOPOGRAPHY_API_KEY
-                    )
-                    dem_save_path = auto_dem_path
-                    dem_metadata_obj = GeospatialService.inspect_dem_file(
-                        dem_path=dem_save_path,
-                        image_crs=meta.crs,
-                        image_bounds=meta.bounds
-                    )
-                    srtm_info["auto_downloaded"] = True
-                except Exception as e:
-                    logger.warning(f"Failed to auto-download SRTM: {e}")
-                    srtm_info["auto_downloaded"] = False
-                    srtm_info["auto_download_error"] = str(e)
 
         # 5. Handle optional GCPs
         gcp_save_path = None
@@ -403,8 +377,7 @@ class DatasetService:
             "created_at": now_str,
             "status": initial_status,
             "active_job_id": None,
-            "input_validation": val_res.model_dump(),
-            "srtm_info": srtm_info
+            "input_validation": val_res.model_dump()
         }
 
         # Save metadata.json
@@ -440,8 +413,7 @@ class DatasetService:
             thumbnail_url=f"/api/datasets/{dataset_id}/thumbnail",
             active_job_id=None,
             latest_results=None,
-            input_validation=val_res,
-            srtm_info=srtm_info
+            input_validation=val_res
         )
 
         self.datasets[dataset_id] = summary

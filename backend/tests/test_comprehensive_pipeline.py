@@ -168,8 +168,8 @@ def test_case_c_georeferenced_geotiff():
     summary = proc_resp.json()
 
     assert summary['is_georeferenced'] is True
-    assert summary['calibration']['method'] == 'relative'
-    assert summary['calibration']['confidence'] == 'relative'
+    assert summary['calibration']['method'] == 'scaled_estimate'
+    assert summary['calibration']['confidence'] == 'estimated'
 
     # Check generated GeoTIFF maintains CRS
     dsm_tif_path = settings.DSM_DIR / f'{job_id}_dsm.tif'

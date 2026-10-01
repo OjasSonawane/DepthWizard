@@ -111,7 +111,7 @@ export const HUD: React.FC<HUDProps> = ({
 
               <div className="grid grid-cols-2 gap-2 text-[11px]">
                 <div className="p-2 rounded bg-slate-950/60 border border-slate-800">
-                  <div className="text-[9px] text-slate-400 font-bold uppercase">ESTIMATED ELEVATION</div>
+                  <div className="text-[9px] text-slate-400 font-bold uppercase">PREDICTED HEIGHT</div>
                   <div className="text-sm font-bold text-white mt-0.5">
                     {activeInspection.elevation !== undefined
                       ? `${activeInspection.elevation.toFixed(2)} ${isMetric ? 'm' : 'rel'}`

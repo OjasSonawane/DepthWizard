@@ -588,18 +588,6 @@ export const ValidationPage: React.FC = () => {
         <div className="space-y-8">
           {/* Dynamic Configured Metric Cards Grid */}
           <div>
-            {!results.dsm_stats.is_metric && (
-              <div className="mb-4 p-4 rounded-xl bg-amber-900/20 border border-amber-500/30 flex items-start gap-3">
-                <AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
-                <div className="space-y-1">
-                  <h4 className="text-amber-500 font-bold text-sm">Relative Digital Surface Model (rDSM)</h4>
-                  <p className="text-xs text-amber-200/70">
-                    The predicted elevation is non-metric. Absolute error metrics (like MAE or RMSE in meters) are mathematically invalid and have been skipped. Only scale-invariant metrics are shown.
-                  </p>
-                </div>
-              </div>
-            )}
-            
             <div className="flex items-center justify-between mb-3 text-xs font-mono">
               <span className="text-slate-400 uppercase font-bold tracking-wider">
                 Configured Metrics Results ({displayMetrics.length} Metrics Displayed)
@@ -612,7 +600,7 @@ export const ValidationPage: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {displayMetrics.filter(m => results.dsm_stats.is_metric || !['mae', 'rmse', 'mbe', 'mean_error', 'median_error', 'median_abs_error', 'max_abs_error', 'min_error', 'max_error', 'le90', 'le95', 'slope_mae', 'slope_rmse'].includes(m.key)).map((m) => {
+              {displayMetrics.map((m) => {
                 const val = m.getValue(evaluation.metrics!);
                 if (val === null || val === undefined) return null;
 

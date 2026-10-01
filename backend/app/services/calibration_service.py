@@ -1,7 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
 from typing import Tuple, Optional, List, Dict, Any
-from pathlib import Path
 import numpy as np
 import rasterio
 from sklearn.linear_model import HuberRegressor, LinearRegression
@@ -83,77 +82,21 @@ class DEMCalibrationStrategy(BaseCalibrationStrategy):
     def calibrate(
         self,
         relative_depth: np.ndarray,
-        reference_path: Optional[Path] = None,
-        crs_str: Optional[str] = None,
-        transform_list: Optional[Any] = None,
+        reference_dem: Optional[np.ndarray] = None,
         **kwargs
     ) -> Tuple[np.ndarray, CalibrationResult]:
-        import rasterio.windows
-        import rasterio.crs
-        
-        reference_dem = kwargs.get("reference_dem")
-        if reference_path is None and reference_dem is not None:
-            dem_crop = reference_dem
-            depth_downsampled = relative_depth
-            dem_nodata = -32768.0
-        elif reference_path is None or crs_str is None or transform_list is None:
-            raise ValueError("Reference DEM path and spatial metadata required for DEM calibration.")
-        else:
-            with rasterio.open(reference_path) as src:
-                dem_nodata = src.nodata if src.nodata is not None else -32768.0
-                dem_crs = src.crs
-                dem_transform = src.transform
-                
-                from rasterio.warp import transform_bounds, reproject, Resampling
-                from rasterio.transform import Affine
-                
-                target_transform = Affine(*transform_list) if isinstance(transform_list, (list, tuple)) else transform_list
-                target_crs = rasterio.crs.CRS.from_string(crs_str)
-                target_h, target_w = relative_depth.shape
-                
-                target_bounds = [
-                    target_transform.c,
-                    target_transform.f + target_transform.e * target_h,
-                    target_transform.c + target_transform.a * target_w,
-                    target_transform.f
-                ]
-                target_bounds = [
-                    min(target_bounds[0], target_bounds[2]),
-                    min(target_bounds[1], target_bounds[3]),
-                    max(target_bounds[0], target_bounds[2]),
-                    max(target_bounds[1], target_bounds[3])
-                ]
-                
-                try:
-                    dem_bounds = transform_bounds(target_crs, dem_crs, *target_bounds)
-                    window = rasterio.windows.from_bounds(*dem_bounds, transform=dem_transform)
-                    window = window.intersection(rasterio.windows.Window(0, 0, src.width, src.height))
-                    window = window.round_lengths().round_offsets()
-                    
-                    dem_crop = src.read(1, window=window).astype(np.float32)
-                    dem_crop_transform = rasterio.windows.transform(window, dem_transform)
-                except Exception as e:
-                    logger.warning(f"Error cropping DEM, falling back to full DEM: {e}")
-                    dem_crop = src.read(1).astype(np.float32)
-                    dem_crop_transform = dem_transform
+        if reference_dem is None:
+            raise ValueError("Reference DEM raster is required for DEM calibration.")
 
-                depth_downsampled = np.full(dem_crop.shape, np.nan, dtype=np.float32)
-                reproject(
-                    source=relative_depth,
-                    destination=depth_downsampled,
-                    src_transform=target_transform,
-                    src_crs=target_crs,
-                    dst_transform=dem_crop_transform,
-                    dst_crs=dem_crs,
-                    resampling=Resampling.average,
-                    dst_nodata=np.nan
-                )
-            
+        if relative_depth.shape != reference_dem.shape:
+            raise ValueError(
+                f"Dimension mismatch: relative depth {relative_depth.shape} != reference DEM {reference_dem.shape}."
+            )
+
         valid_mask = (
-            np.isfinite(depth_downsampled) &
-            np.isfinite(dem_crop) &
-            (dem_crop > -9000.0) &
-            (dem_crop != dem_nodata)
+            np.isfinite(relative_depth) &
+            np.isfinite(reference_dem) &
+            (reference_dem > -9000.0)
         )
         n_valid = int(np.count_nonzero(valid_mask))
         if n_valid < 20:
@@ -161,8 +104,8 @@ class DEMCalibrationStrategy(BaseCalibrationStrategy):
                 f"Insufficient valid overlapping pixels ({n_valid} found, minimum 20 required) between relative depth and reference DEM."
             )
 
-        x_raw = depth_downsampled[valid_mask].astype(np.float64)
-        y_raw = dem_crop[valid_mask].astype(np.float64)
+        x_raw = relative_depth[valid_mask].astype(np.float64)
+        y_raw = reference_dem[valid_mask].astype(np.float64)
 
         # Check empirical monotonic correlation between disparity and reference elevation via Spearman rank correlation
         rng = np.random.RandomState(42)
@@ -232,15 +175,8 @@ class DEMCalibrationStrategy(BaseCalibrationStrategy):
             correlation = None
 
         confidence = "high" if (r2 >= 0.50 and n_valid >= 100) else "medium" if (r2 >= 0.05 or (correlation is not None and correlation >= 0.10) or n_valid >= 1000) else "low"
-        if r2 < 0.0 or (correlation is not None and correlation < 0.1):
-            confidence = "low"
-        
         polarity_msg = " [inverted polarity compensated]" if inverted_polarity else ""
-        msg = f"Calibrated via area-averaged reference DEM{polarity_msg} (R²={r2:.2f}, RMSE={rmse:.2f}m, MAE={mae:.2f}m, N={n_valid})."
-        
-        # Explicit warning if confidence is low
-        if confidence == "low":
-            msg = f"WARNING: Low calibration confidence! Check overlap and terrain relief. " + msg
+        msg = f"Calibrated via reference DEM{polarity_msg} (R²={r2:.2f}, RMSE={rmse:.2f}m, MAE={mae:.2f}m, N={n_valid})."
 
         result = CalibrationResult(
             method="dem",
@@ -371,6 +307,45 @@ class GCPCalibrationStrategy(BaseCalibrationStrategy):
         return dsm, result
 
 
+class ScaledEstimateCalibrationStrategy(BaseCalibrationStrategy):
+    """
+    Transparent scaled estimate for georeferenced imagery when neither DEM nor GCPs are provided.
+    Explicitly marked as an uncalibrated estimate (is_metric=False) with clear confidence flagging.
+    """
+    def calibrate(
+        self,
+        relative_depth: np.ndarray,
+        estimated_relief_m: float = 60.0,
+        base_elevation_m: float = 100.0,
+        **kwargs
+    ) -> Tuple[np.ndarray, CalibrationResult]:
+        valid_mask = np.isfinite(relative_depth)
+        if not np.any(valid_mask):
+            raise ValueError("Input depth raster contains no finite valid pixels.")
+
+        d_min = float(np.min(relative_depth[valid_mask]))
+        d_max = float(np.max(relative_depth[valid_mask]))
+        norm = (relative_depth - d_min) / max(1e-6, d_max - d_min)
+
+        dsm = (norm * float(estimated_relief_m) + float(base_elevation_m)).astype(np.float32)
+
+        result = CalibrationResult(
+            method="scaled_estimate",
+            is_metric=False,
+            scale=float(estimated_relief_m),
+            offset=float(base_elevation_m),
+            r2=None,
+            rmse=None,
+            mae=None,
+            correlation=None,
+            valid_pixels=int(np.count_nonzero(valid_mask)),
+            gcp_count=None,
+            confidence="estimated",
+            message="Uncalibrated georeferenced estimate: nominal relief applied. Reference DEM/GCP required for metric validity."
+        )
+        return dsm, result
+
+
 class CalibrationService:
     """
     Unified Calibration Facade dispatching to strict mathematical strategies.
@@ -380,13 +355,25 @@ class CalibrationService:
         return RelativeCalibrationStrategy().calibrate(relative_depth)
 
     @staticmethod
+    def calibrate_scaled_estimate(
+        relative_depth: np.ndarray,
+        estimated_relief_m: float = 60.0,
+        base_elevation_m: float = 100.0
+    ) -> Tuple[np.ndarray, CalibrationResult]:
+        return ScaledEstimateCalibrationStrategy().calibrate(
+            relative_depth,
+            estimated_relief_m=estimated_relief_m,
+            base_elevation_m=base_elevation_m
+        )
+
+    @staticmethod
     def calibrate_with_dem(
         relative_depth: np.ndarray,
-        **kwargs
+        reference_dem: np.ndarray
     ) -> Tuple[np.ndarray, CalibrationResult]:
         return DEMCalibrationStrategy().calibrate(
             relative_depth,
-            **kwargs
+            reference_dem=reference_dem
         )
 
     @staticmethod

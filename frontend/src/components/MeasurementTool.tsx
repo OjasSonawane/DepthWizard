@@ -92,8 +92,12 @@ export const MeasurementHUDCard: React.FC<MeasurementToolProps> = ({
       const metersPerWorldUnit = (dataWidth * resM) / worldXSpan;
       distHoriz = distHorizWorld * metersPerWorldUnit;
       dist3D = Math.sqrt(distHoriz * distHoriz + deltaZ * deltaZ);
-      slopeDeg = distHoriz > 0 ? (Math.atan(deltaZ / distHoriz) * 180) / Math.PI : 0;
+    } else {
+      distHoriz = distHorizWorld;
+      dist3D = Math.sqrt(distHoriz * distHoriz + deltaZ * deltaZ);
     }
+
+    slopeDeg = distHoriz > 0 ? (Math.atan(deltaZ / distHoriz) * 180) / Math.PI : 0;
   }
 
   return (
@@ -130,22 +134,18 @@ export const MeasurementHUDCard: React.FC<MeasurementToolProps> = ({
             <span className="text-emerald-400">Elevation Diff (ΔZ):</span>
             <span className="text-emerald-300">{deltaZ.toFixed(2)} {unit}</span>
           </div>
-          {isMetric && (
-            <>
-              <div className="flex items-center justify-between text-slate-300">
-                <span className="text-slate-400">Horizontal Ground Dist:</span>
-                <span className="text-cyan-300 font-bold">{distHoriz.toFixed(2)} {unit}</span>
-              </div>
-              <div className="flex items-center justify-between text-slate-300">
-                <span className="text-slate-400">3D Euclidean Distance:</span>
-                <span className="text-slate-200">{dist3D.toFixed(2)} {unit}</span>
-              </div>
-              <div className="flex items-center justify-between text-slate-400 text-[10px]">
-                <span>Gradient / Slope:</span>
-                <span className="text-amber-300 font-bold">{slopeDeg.toFixed(1)}°</span>
-              </div>
-            </>
-          )}
+          <div className="flex items-center justify-between text-slate-300">
+            <span className="text-slate-400">Horizontal Ground Dist:</span>
+            <span className="text-cyan-300 font-bold">{distHoriz.toFixed(2)} {unit}</span>
+          </div>
+          <div className="flex items-center justify-between text-slate-300">
+            <span className="text-slate-400">3D Euclidean Distance:</span>
+            <span className="text-slate-200">{dist3D.toFixed(2)} {unit}</span>
+          </div>
+          <div className="flex items-center justify-between text-slate-400 text-[10px]">
+            <span>Gradient / Slope:</span>
+            <span className="text-amber-300 font-bold">{slopeDeg.toFixed(1)}°</span>
+          </div>
         </div>
       )}
     </div>

@@ -54,11 +54,6 @@ class DepthEstimator:
             logger.info(f"Attempting local cache load for {self.model_name}...")
             self.processor = AutoImageProcessor.from_pretrained(self.model_name, local_files_only=True)
             self.model = AutoModelForDepthEstimation.from_pretrained(self.model_name, local_files_only=True)
-            
-            if settings.MODEL_WEIGHTS and os.path.exists(settings.MODEL_WEIGHTS):
-                logger.info(f"Loading custom fine-tuned weights from {settings.MODEL_WEIGHTS}")
-                self.model.load_state_dict(torch.load(settings.MODEL_WEIGHTS, map_location="cpu", weights_only=True))
-                
             self.model.to(self.torch_device)
             self.model.eval()
             self.is_loaded = True
@@ -73,11 +68,6 @@ class DepthEstimator:
             logger.info(f"Attempting online load for {self.model_name}...")
             self.processor = AutoImageProcessor.from_pretrained(self.model_name)
             self.model = AutoModelForDepthEstimation.from_pretrained(self.model_name)
-            
-            if settings.MODEL_WEIGHTS and os.path.exists(settings.MODEL_WEIGHTS):
-                logger.info(f"Loading custom fine-tuned weights from {settings.MODEL_WEIGHTS}")
-                self.model.load_state_dict(torch.load(settings.MODEL_WEIGHTS, map_location="cpu", weights_only=True))
-                
             self.model.to(self.torch_device)
             self.model.eval()
             self.is_loaded = True
@@ -88,7 +78,7 @@ class DepthEstimator:
             logger.error(f"Failed to load Depth Anything V2 weights from '{self.model_name}': {e_net}")
             raise RuntimeError(
                 f"Depth Anything V2 model '{self.model_name}' could not be loaded. "
-                f"Ensure weights are cached or network access is available (unset DEPTHWIZARD_OFFLINE=1). "
+                f"Ensure weights are cached or network access is available. "
                 f"No synthetic/heuristic placeholder terrain is permitted."
             ) from e_net
 
